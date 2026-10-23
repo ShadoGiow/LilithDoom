@@ -300,6 +300,19 @@ namespace bf
 
 		S.iniVersion = 2.0f;
 
+		// Migra i vecchi trigger idle vanilla alla clip standalone registrata da Nemesis.
+		{
+			const auto old = Lower(S.triggerEvent);
+			if (old.empty() || old == "idlecombatstart" || old == "idlecombatspecialstart" ||
+			    old == "idlecombatweaponcheckstart" || old == "idlecombatstretchingstart" ||
+			    old == "idlecombatlookingaroundstart") {
+				std::strncpy(S.triggerEvent, "BFM_Ignite", sizeof(S.triggerEvent) - 1);
+				S.triggerEvent[sizeof(S.triggerEvent) - 1] = 0;
+				S.badEvents[0] = 0;
+				S.fallbackIgnite = false;
+			}
+		}
+
 		// limiti di sicurezza
 		S.fireMult = std::clamp(S.fireMult, 0.0f, 50.0f);
 		S.fireFlat = std::clamp(S.fireFlat, 0.0f, 5000.0f);

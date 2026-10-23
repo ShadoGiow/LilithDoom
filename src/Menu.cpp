@@ -253,7 +253,7 @@ namespace bf::menu
 			igSeparatorText.fn("Animazione di accensione");
 			Check("Usa l'animazione##animon", S.animEnabled, "Se spento la lama si accende subito, senza animazione");
 			Text("Evento di avvio##trigger", S.triggerEvent, sizeof(S.triggerEvent),
-				"Evento inviato al personaggio per far partire un idle di combattimento. Se rifiutato provo gli altri della lista");
+				"Evento Nemesis dedicato alla singola clip. Valore predefinito: BFM_Ignite");
 			if (S.badEvents[0]) {
 				TextColoredF(kOrange, "Eventi scartati (hanno fatto rinfoderare l'arma): %s", S.badEvents);
 				if (Button("Azzera elenco scartati")) { S.badEvents[0] = 0; RequestSave(); }
@@ -292,7 +292,7 @@ namespace bf::menu
 			if (Button("Prova##t2")) mode::RequestSoundTest(S.soundOff);
 
 			igSeparatorText.fn("Installa un'altra animazione");
-			TextWrappedF("Scrivi il percorso di un file .hkx e premi Installa: il file viene copiato nella cartella di Open Animation Replacer con tutti i nomi delle clip di combat idle.");
+			TextWrappedF("Scrivi il percorso del file .hkx e premi Installa: viene sostituita solo la clip standalone Ignite.hkx.");
 			Text("File .hkx##animsrc", S.animSource, sizeof(S.animSource));
 			static std::string result;
 			if (Button("Installa")) {
@@ -301,13 +301,11 @@ namespace bf::menu
 			if (!result.empty()) {
 				TextColoredF(result.rfind("OK", 0) == 0 ? kGreen : kOrange, "%s", result.c_str());
 			}
-			TextDisabledF("Cartella: %s/Ignite  (file presenti: %d)", anim::OarRelative(), anim::InstalledCount());
+			TextDisabledF("Clip: %s/Ignite.hkx  (presente: %s)", anim::OarRelative(), anim::InstalledCount() ? "si" : "no");
 
 			igSeparatorText.fn("Prova eventi");
-			TextWrappedF("Per capire quale evento fa partire l'animazione: premi un pulsante con l'arma estratta e guarda il registro (pagina Diagnostica).");
-			for (auto* e : { "IdleCombatStart", "IdleCombatSpecialStart", "IdleCombatWeaponCheckStart", "IdleCombatStretchingStart", "IdleCombatLookingAroundStart" }) {
-				if (Button(e)) mode::RequestEvent(e);
-			}
+			TextWrappedF("Testa l'evento registrato nella patch Nemesis. Se viene rifiutato, controlla che la patch sia selezionata e che Nemesis abbia generato i behavior.");
+			if (Button("Test BFM_Ignite")) mode::RequestEvent("BFM_Ignite");
 		}
 
 		void __stdcall PageDamage()

@@ -477,31 +477,12 @@ namespace bf::mode
 			gAnimWindow = true;
 			gAnimWindowUntil = ClockNow() + 12.0;
 
-			auto build = [&](bool a_skipBad) {
-				std::vector<std::string> cands;
-				auto add = [&](const std::string& e) {
-					if (e.empty() || (a_skipBad && IsBad(e))) return;
-					if (std::find(cands.begin(), cands.end(), e) == cands.end()) cands.push_back(e);
-				};
-				add(S.triggerEvent);
-				for (auto* e : { "IdleCombatStart", "IdleCombatSpecialStart", "IdleCombatWeaponCheckStart", "IdleCombatStretchingStart", "IdleCombatLookingAroundStart" }) add(e);
-				return cands;
-			};
-			auto cands = build(true);
-			if (cands.empty()) {
-				Say("tutti gli eventi risultano scartati: azzero l'elenco e riprovo da capo");
-				S.badEvents[0] = 0;
-				RequestSave();
-				cands = build(false);
-			}
-
-			bool ok = false;
-			gLastEvent.clear();
-			for (auto& c : cands) {
-				ok = a_pc->NotifyAnimationGraph(c);
-				Say("evento '{}' -> {}", c, ok ? "accettato" : "rifiutato");
-				if (ok) { gLastEvent = c; break; }
-			}
+			// L'evento BFM_Ignite entra nello stato Nemesis dedicato e riproduce
+			// una sola clip. Non provare gli idle vanilla: altre mod li sostituiscono.
+			const std::string event = S.triggerEvent[0] ? S.triggerEvent : "BFM_Ignite";
+			const bool ok = a_pc->NotifyAnimationGraph(event);
+			Say("evento standalone '{}' -> {}", event, ok ? "accettato" : "rifiutato");
+			gLastEvent = ok ? event : std::string{};
 
 			gReqClock = ClockNow();
 			if (ok) {
@@ -543,8 +524,7 @@ namespace bf::mode
 					msg += " (ho disattivato il blocco dei comandi, riprova)";
 				}
 				if (!gLastEvent.empty() && (a_now - gReqClock.load()) < 3.0) {
-					MarkBad(gLastEvent);
-					msg += " Evento '" + gLastEvent + "' scartato: al prossimo tentativo ne uso un altro";
+					msg += " Evento standalone '" + gLastEvent + "' interrotto; al prossimo uso verra' riprovato";
 				}
 				Hud(msg);
 				Abort("arma rinfoderata durante l'animazione");

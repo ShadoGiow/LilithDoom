@@ -30,7 +30,7 @@ in sincronia con un'animazione, con danni di fuoco extra e consumo di mana.
 | `src/Input.*` | lettura tasti (XInput + tastiera/mouse), combinazioni, registrazione dal menu |
 | `src/Fx.*` | ricerca del gruppo effetti sulla spada e avvio delle sequenze |
 | `src/Mode.*` | macchina a stati, sink animazione e colpi, mana, danni, suoni, blocco comandi (opzionale: movimento; gli attacchi NON si bloccano, farebbe rinfoderare l'arma) |
-| `src/Anim.*` | installazione di un'animazione nella cartella di Open Animation Replacer |
+| `src/Anim.*` | installazione di un'animazione nella cartella standalone BladeFireMode |
 | `src/Menu.*` | pagine del menu F1 (funzioni cimgui collegate a runtime) |
 
 ## Compilazione

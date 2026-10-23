@@ -34,9 +34,9 @@ namespace bf
 
 		// --- animazione di accensione
 		bool  animEnabled{ true };
-		char  triggerEvent[96]{ "IdleCombatStart" };  // evento di animazione inviato al personaggio
+		char  triggerEvent[96]{ "BFM_Ignite" };  // evento della clip standalone registrata da Nemesis
 		char  badEvents[320]{ "" };                   // eventi che hanno fatto rinfoderare l'arma (separati da virgola): non vengono piu' usati
-		bool  fallbackIgnite{ true };                 // se l'animazione non parte accendi comunque
+		bool  fallbackIgnite{ false };                // se la clip non parte, segnala l'errore
 		bool  lockControls{ false };                  // blocca movimento/salto/furtivita' mentre dura la clip
 		bool  lockAttack{ false };                    // blocca ANCHE attacchi/guardia/arma (puo' far rinfoderare l'arma: sconsigliato)
 		bool  drawIfSheathed{ true };                 // se l'arma e' rinfoderata, la estrae prima
