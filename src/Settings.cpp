@@ -34,19 +34,13 @@ namespace bf
 				{ "Tasti", "Accendi", T::Bind, &S.bindOn, 0 },
 				{ "Tasti", "Spegni", T::Bind, &S.bindOff, 0 },
 
-				{ "Animazione", "Attiva", T::Bool, &S.animEnabled, 0 },
-				{ "Animazione", "EventoInnesco", T::Str, S.triggerEvent, sizeof(S.triggerEvent) },
-				{ "Animazione", "EventiScartati", T::Str, S.badEvents, sizeof(S.badEvents) },
-				{ "Animazione", "AccendiComunque", T::Bool, &S.fallbackIgnite, 0 },
-				{ "Animazione", "BloccaMovimento", T::Bool, &S.lockControls, 0 },
-				{ "Animazione", "BloccaAttacchi", T::Bool, &S.lockAttack, 0 },
+
 				{ "Animazione", "EstraiArma", T::Bool, &S.drawIfSheathed, 0 },
 				{ "Animazione", "SecondiContatto", T::Float, &S.ignitionOffset, 0 },
 				{ "Animazione", "SecondiAccensione", T::Float, &S.rampSeconds, 0 },
 				{ "Animazione", "DurataClip", T::Float, &S.clipLength, 0 },
 				{ "Animazione", "AttesaPartenza", T::Float, &S.startTimeout, 0 },
-				{ "Animazione", "EventoRiferimento", T::Str, S.anchorTag, sizeof(S.anchorTag) },
-				{ "Animazione", "ContenutoRiferimento", T::Str, S.anchorPayload, sizeof(S.anchorPayload) },
+
 				{ "Animazione", "SecondiRiferimento", T::Float, &S.anchorTime, 0 },
 				{ "Animazione", "UltimoFileScelto", T::Str, S.animSource, sizeof(S.animSource) },
 
@@ -298,21 +292,22 @@ namespace bf
 			}
 		}
 
-		S.iniVersion = 2.0f;
-
-		// Migra i vecchi trigger idle vanilla alla clip standalone registrata da Nemesis.
-		{
-			const auto old = Lower(S.triggerEvent);
-			if (old.empty() || old == "idlecombatstart" || old == "idlecombatspecialstart" ||
-			    old == "idlecombatweaponcheckstart" || old == "idlecombatstretchingstart" ||
-			    old == "idlecombatlookingaroundstart") {
-				std::strncpy(S.triggerEvent, "BFM_Ignite", sizeof(S.triggerEvent) - 1);
-				S.triggerEvent[sizeof(S.triggerEvent) - 1] = 0;
-				S.badEvents[0] = 0;
-				S.fallbackIgnite = false;
-			}
-		}
-
+		// Invarianti dell'opening: l'INI delle vecchie versioni non puo' piu'
+		// disattivare la clip, cambiare evento o accendere la lama come fallback.
+		S.iniVersion = 3.0f;
+		S.animEnabled = true;
+		S.fallbackIgnite = false;
+		S.lockControls = true;
+		S.lockAttack = true;
+		S.badEvents[0] = 0;
+		std::strncpy(S.triggerEvent, "BFM_Ignite", sizeof(S.triggerEvent) - 1);
+		S.triggerEvent[sizeof(S.triggerEvent) - 1] = 0;
+		std::strncpy(S.anchorTag, "Pie", sizeof(S.anchorTag) - 1);
+		S.anchorTag[sizeof(S.anchorTag) - 1] = 0;
+		std::strncpy(S.anchorPayload, "@APPLYSPELL", sizeof(S.anchorPayload) - 1);
+		S.anchorPayload[sizeof(S.anchorPayload) - 1] = 0;
+		S.anchorTime = 0.20f;
+		S.startTimeout = 1.50f;
 		// limiti di sicurezza
 		S.fireMult = std::clamp(S.fireMult, 0.0f, 50.0f);
 		S.fireFlat = std::clamp(S.fireFlat, 0.0f, 5000.0f);
@@ -325,8 +320,9 @@ namespace bf
 		S.ignitionOffset = std::clamp(S.ignitionOffset, 0.0f, 20.0f);
 		S.rampSeconds = std::clamp(S.rampSeconds, 0.3f, 10.0f);
 		S.clipLength = std::clamp(S.clipLength, 0.5f, 30.0f);
-		S.startTimeout = std::clamp(S.startTimeout, 0.2f, 10.0f);
-		S.anchorTime = std::clamp(S.anchorTime, 0.0f, 30.0f);
+		if (S.clipLength <= S.ignitionOffset) S.clipLength = S.ignitionOffset + 0.25f;
+		gDirty = true;
+
 	}
 
 	void SaveSettings()
@@ -380,3 +376,4 @@ namespace bf
 		return false;
 	}
 }
+
