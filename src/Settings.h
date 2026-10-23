@@ -23,7 +23,7 @@ namespace bf
 
 	struct Settings
 	{
-		float iniVersion{ 2.0f };  // versione del formato (migra i vecchi file INI)
+		float iniVersion{ 3.0f };  // versione del formato (migra i vecchi file INI)
 
 		// --- spada riconosciuta (pezzo del percorso del modello dell'arma equipaggiata a destra)
 		char swordMatch[128]{ "harbinger2h" };
@@ -33,12 +33,12 @@ namespace bf
 		Binding bindOff;
 
 		// --- animazione di accensione
-		bool  animEnabled{ true };
+		bool  animEnabled{ true };                 // invariato: la clip e' obbligatoria
 		char  triggerEvent[96]{ "BFM_Ignite" };  // evento della clip standalone registrata da Nemesis
 		char  badEvents[320]{ "" };                   // eventi che hanno fatto rinfoderare l'arma (separati da virgola): non vengono piu' usati
-		bool  fallbackIgnite{ false };                // accendi solo se l'evento resta rifiutato fino al timeout
-		bool  lockControls{ false };                  // blocca movimento/salto/furtivita' mentre dura la clip
-		bool  lockAttack{ false };                    // blocca ANCHE attacchi/guardia/arma (puo' far rinfoderare l'arma: sconsigliato)
+		bool  fallbackIgnite{ false };              // invariato: nessun fuoco senza marker della clip                // accendi solo se l'evento resta rifiutato fino al timeout
+		bool  lockControls{ true };                 // invariato: l'opening blocca il gameplay                  // blocca movimento/salto/furtivita' mentre dura la clip
+		bool  lockAttack{ true };                   // invariato: l'opening blocca il gameplay                    // blocca ANCHE attacchi/guardia/arma (puo' far rinfoderare l'arma: sconsigliato)
 		bool  drawIfSheathed{ true };                 // se l'arma e' rinfoderata, la estrae prima
 		float ignitionOffset{ 2.70f };                // secondi dall'inizio della clip al contatto mano-lama
 		float rampSeconds{ 2.33f };                   // durata dell'accensione graduale
@@ -94,3 +94,4 @@ namespace bf
 	std::string InputName(InputId a_id);
 	bool        InputFromName(const std::string& a_name, InputId& a_out);
 }
+
