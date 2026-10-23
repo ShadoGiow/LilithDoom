@@ -250,64 +250,32 @@ namespace bf::menu
 
 		void __stdcall PageAnim()
 		{
-			igSeparatorText.fn("Animazione di accensione");
-			Check("Usa l'animazione##animon", S.animEnabled, "Se spento la lama si accende subito, senza animazione");
-			Text("Evento di avvio##trigger", S.triggerEvent, sizeof(S.triggerEvent),
-				"Evento Nemesis dedicato alla singola clip. Valore predefinito: BFM_Ignite");
-			if (S.badEvents[0]) {
-				TextColoredF(kOrange, "Eventi scartati (hanno fatto rinfoderare l'arma): %s", S.badEvents);
-				if (Button("Azzera elenco scartati")) { S.badEvents[0] = 0; RequestSave(); }
-			}
-			Check("Accendi al timeout se il trigger non parte##fallback", S.fallbackIgnite);
-			Check("Blocca movimento e salto durante l'animazione##lock", S.lockControls,
-				"Evita di interrompere la clip camminando. Se l'arma viene rinfoderata mentre e' attivo lo spengo da solo");
-			Check("Blocca anche attacchi e guardia (sconsigliato)##lockatk", S.lockAttack,
-				"Disattivare i comandi di combattimento fa RINFODERARE l'arma e interrompe la clip: lascia spento");
+			igSeparatorText.fn("Opening Ignite");
+			TextWrappedF("L'opening e' obbligatoria: alla combinazione di tasti il gameplay viene bloccato, il DLL avvia BFM_Ignite e la lama si accende solo dopo il marker della clip.");
+			TextDisabledF("Evento fisso: BFM_Ignite   |   marker fisso: Pie [@APPLYSPELL] a 0.20 s");
+			TextDisabledF("Nessun fallback: se il behavior o il marker non sono presenti, l'accensione viene annullata.");
 			Check("Estrai l'arma se e' rinfoderata##draw", S.drawIfSheathed);
 
-			igSeparatorText.fn("Tempi (secondi)");
-			Slider("Contatto mano-lama##offset", S.ignitionOffset, 0.0f, 8.0f, "%.2f",
-				"Istante della clip in cui la mano sinistra tocca la lama: da qui parte l'accensione");
-			Slider("Durata accensione graduale##ramp", S.rampSeconds, 0.5f, 6.0f, "%.2f",
-				"Quanto dura la crescita del fuoco (l'effetto originale dura 2.33 s)");
-			Slider("Durata totale della clip##cliplen", S.clipLength, 1.0f, 15.0f, "%.2f", "Dopo questo tempo i comandi tornano liberi");
-			Slider("Attesa massima partenza##startto", S.startTimeout, 0.2f, 5.0f, "%.2f", "Se non arriva nessuna annotazione stimo l'inizio dopo questo tempo");
-
-			igSeparatorText.fn("Sincronia con la clip");
-			TextWrappedF("Le annotazioni SoundPlay.* non arrivano ai plugin: mi aggancio a un evento 'Pie' della clip (si vede nel registro con il suo contenuto).");
-			Text("Evento di riferimento##anchor", S.anchorTag, sizeof(S.anchorTag),
-				"Nome dell'evento della clip (nel registro compare come 'evento: Pie [contenuto]')");
-			Text("Il contenuto deve contenere##anchorp", S.anchorPayload, sizeof(S.anchorPayload),
-				"Parte del testo dell'evento (es. @APPLYSPELL). Vuoto = il primo evento di quel nome");
-			Slider("Secondo della clip in cui compare##anchort", S.anchorTime, 0.0f, 10.0f, "%.2f", "A che secondo della clip compare quell'evento (nella clip fornita: 0.20)");
+			igSeparatorText.fn("Sincronia fissata alla clip");
+			TextF("Contatto mano-lama: %.2f s", S.ignitionOffset);
+			TextF("Accensione graduale: %.2f s", S.rampSeconds);
+			TextF("Durata clip: %.2f s", S.clipLength);
+			TextDisabledF("Questi valori sono bloccati nel menu per non desincronizzare l'animazione fornita.");
 
 			igSeparatorText.fn("Suoni");
 			Check("Suoni attivi##sndon", S.soundEnabled);
-			Text("All'accensione (editor ID)##sndign", S.soundIgnite, sizeof(S.soundIgnite),
-				"Nome (editor ID) di un suono di Skyrim. Come default: quello della mod originale (arma evocata). Vuoto = nessuno");
+			Text("All'accensione (editor ID)##sndign", S.soundIgnite, sizeof(S.soundIgnite));
 			igSameLine.fn(0.0f, 8.0f);
 			if (Button("Prova##t1")) mode::RequestSoundTest(S.soundIgnite);
 			Text("Allo spegnimento (editor ID)##sndoff", S.soundOff, sizeof(S.soundOff));
 			igSameLine.fn(0.0f, 8.0f);
 			if (Button("Prova##t2")) mode::RequestSoundTest(S.soundOff);
 
-			igSeparatorText.fn("Installa un'altra animazione");
-			TextWrappedF("Scrivi il percorso del file .hkx e premi Installa: viene sostituita solo la clip standalone Ignite.hkx.");
-			Text("File .hkx##animsrc", S.animSource, sizeof(S.animSource));
-			static std::string result;
-			if (Button("Installa")) {
-				result = anim::Install(S.animSource);
-			}
-			if (!result.empty()) {
-				TextColoredF(result.rfind("OK", 0) == 0 ? kGreen : kOrange, "%s", result.c_str());
-			}
-			TextDisabledF("Clip: %s/Ignite.hkx  (presente: %s)", anim::OarRelative(), anim::InstalledCount() ? "si" : "no");
-
-			igSeparatorText.fn("Prova eventi");
-			TextWrappedF("Testa l'evento registrato nella patch Nemesis. Se viene rifiutato, controlla che la patch sia selezionata e che Nemesis abbia generato i behavior.");
+			igSeparatorText.fn("Stato behavior");
+			TextDisabledF("Clip registrata: %s/Ignite.hkx  (presente: %s)", anim::OarRelative(), anim::InstalledCount() ? "si" : "no");
+			TextWrappedF("Dopo l'installazione dei file dati esegui Nemesis una volta. Il file VERIFICA-NEMESIS.ps1 del pacchetto deve riportare PASS prima di avviare Skyrim.");
 			if (Button("Test BFM_Ignite")) mode::RequestEvent("BFM_Ignite");
 		}
-
 		void __stdcall PageDamage()
 		{
 			igSeparatorText.fn("Danni di fuoco extra");
@@ -373,3 +341,4 @@ namespace bf::menu
 		return true;
 	}
 }
+
