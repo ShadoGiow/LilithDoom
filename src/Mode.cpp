@@ -13,8 +13,11 @@ namespace bf::mode
 		using clk = std::chrono::steady_clock;
 
 		constexpr auto kEsp = "BladeFireMode.esp";
-		constexpr std::uint32_t kGlobalAnim = 0x800;  // 1 = sostituisci l'idle di combattimento con la mia animazione
-		constexpr std::uint32_t kGlobalOn = 0x801;    // 1 = modalita' accesa
+		constexpr std::uint32_t kGlobalOn = 0x801;  // 1 = modalita' accesa
+		// Contratto tra DLL e behavior Nemesis: non esposto alle impostazioni.
+		constexpr auto kIgniteEvent = "BFM_Ignite";
+		constexpr auto kAnchorTag = "pie";
+		constexpr auto kAnchorPayload = "@applyspell";
 
 		// clip e tempi noti dell'animazione fornita (annotazioni -> secondi dall'inizio)
 		struct Anchor { const char* tag; float t; };
@@ -31,16 +34,12 @@ namespace bf::mode
 		std::atomic<double> gReqClock{ 0.0 };
 		double gT0{ 0.0 };            // istante (tempo di gioco) in cui la clip e' partita
 		bool   gHasT0{ false };
-		bool   gTriggerPending{ false };
-		std::string gTriggerEvent;
-		double gTriggerNextTry{ 0.0 };
-		double gTriggerDeadline{ 0.0 };
-		double gTriggerLastLog{ 0.0 };
-		int    gTriggerAttempts{ 0 };
+		double gMarkerDeadline{ 0.0 };
 
 		std::atomic<bool>   gSheathEv{ false };    // l'animazione ha segnalato che l'arma viene rinfoderata
 		std::atomic<bool>   gIdleStopEv{ false };  // la clip si e' fermata (IdleStop)
 		std::uint32_t       gLockFlags{ 0 };
+		std::uint32_t       gRestoreFlags{ 0 };
 		double              gNotDrawnSince{ -1.0 };
 		float               gDiagTimer{ 0.0f };
 
@@ -54,8 +53,7 @@ namespace bf::mode
 
 		bool   gLocked{ false };
 		double gLockUntil{ 0.0 };
-		bool   gAnimWindow{ false };
-		double gAnimWindowUntil{ 0.0 };
+
 		double gDrawStart{ 0.0 };
 		bool   gDrawn{ false };
 		double gDrawnAt{ 0.0 };
@@ -191,37 +189,6 @@ namespace bf::mode
 		void PlayIgnite() { if (S.soundEnabled) PlayByName(S.soundIgnite); }
 		void PlayOff() { if (S.soundEnabled) PlayByName(S.soundOff); }
 
-		// ---- eventi scartati (hanno fatto rinfoderare l'arma): lista separata da virgole, salvata nel file INI
-		std::string gLastEvent;
-
-		std::vector<std::string> BadList()
-		{
-			std::vector<std::string> v;
-			std::string              cur;
-			for (const char* c = S.badEvents; *c; ++c) {
-				if (*c == ',') { if (!cur.empty()) v.push_back(cur); cur.clear(); }
-				else cur.push_back(*c);
-			}
-			if (!cur.empty()) v.push_back(cur);
-			return v;
-		}
-		bool IsBad(const std::string& a_e)
-		{
-			for (auto& b : BadList()) if (Lower(b) == Lower(a_e)) return true;
-			return false;
-		}
-		void MarkBad(const std::string& a_e)
-		{
-			if (a_e.empty() || IsBad(a_e)) return;
-			std::string t = S.badEvents;
-			if (!t.empty()) t += ",";
-			t += a_e;
-			if (t.size() < sizeof(S.badEvents)) {
-				std::memcpy(S.badEvents, t.c_str(), t.size() + 1);
-				RequestSave();
-			}
-		}
-
 		bool IsDrawn(RE::PlayerCharacter* a_pc)
 		{
 			auto* st = a_pc ? a_pc->AsActorState() : nullptr;
@@ -229,66 +196,74 @@ namespace bf::mode
 		}
 
 		// ---------------------------------------------------------------- comandi
-		// Di proposito NON blocco mai attacchi/guardia/arma a meno che lo chieda l'utente: disattivare i comandi di combattimento
-		// fa rinfoderare l'arma e interrompe la clip (e' successo nella prova).
+		// L'apertura Ignite blocca tutte le azioni di gioco fino alla fine della clip.
+		// Menu e Console restano disponibili per poter mettere in pausa il gioco.
 		void Lock(bool a_on)
 		{
 			auto* cm = RE::ControlMap::GetSingleton();
 			if (!cm) return;
 			using F = RE::UserEvents::USER_EVENT_FLAG;
 			if (a_on && !gLocked) {
-				std::uint32_t f = 0;
-				if (S.lockControls) {
-					f |= static_cast<std::uint32_t>(F::kMovement) | static_cast<std::uint32_t>(F::kSneaking) |
-					     static_cast<std::uint32_t>(F::kJumping) | static_cast<std::uint32_t>(F::kActivate);
-				}
-				if (S.lockAttack) {
-					f |= static_cast<std::uint32_t>(F::kFighting) | static_cast<std::uint32_t>(F::kMainFour);
-				}
-				if (f == 0) return;
+				const std::uint32_t f =
+					static_cast<std::uint32_t>(F::kMovement) |
+					static_cast<std::uint32_t>(F::kSneaking) |
+					static_cast<std::uint32_t>(F::kJumping) |
+					static_cast<std::uint32_t>(F::kActivate) |
+					static_cast<std::uint32_t>(F::kFighting) |
+					static_cast<std::uint32_t>(F::kMainFour) |
+					static_cast<std::uint32_t>(F::kLooking) |
+					static_cast<std::uint32_t>(F::kPOVSwitch) |
+					static_cast<std::uint32_t>(F::kWheelZoom) |
+					static_cast<std::uint32_t>(F::kVATS);
 				gLockFlags = f;
+				gRestoreFlags = 0;
+				for (const auto bit : { static_cast<std::uint32_t>(F::kMovement), static_cast<std::uint32_t>(F::kSneaking),
+					static_cast<std::uint32_t>(F::kJumping), static_cast<std::uint32_t>(F::kActivate),
+					static_cast<std::uint32_t>(F::kFighting), static_cast<std::uint32_t>(F::kMainFour),
+					static_cast<std::uint32_t>(F::kLooking), static_cast<std::uint32_t>(F::kPOVSwitch),
+					static_cast<std::uint32_t>(F::kWheelZoom), static_cast<std::uint32_t>(F::kVATS) }) {
+					if (cm->AreControlsEnabled(static_cast<F>(bit))) gRestoreFlags |= bit;
+				}
 				cm->ToggleControls(static_cast<F>(f), false, false);
 				gLocked = true;
-				Say("comandi bloccati (maschera {:#x})", f);
+				Say("controlli di gioco bloccati per la clip Ignite");
 			} else if (!a_on && gLocked) {
-				cm->ToggleControls(static_cast<F>(gLockFlags), true, false);
+				if (gRestoreFlags != 0) cm->ToggleControls(static_cast<F>(gRestoreFlags), true, false);
 				gLocked = false;
-				Say("comandi sbloccati");
+				gLockFlags = 0;
+				gRestoreFlags = 0;
+				Say("controlli di gioco ripristinati");
 			}
 		}
-
 		// ---------------------------------------------------------------- animazione
 		class AnimSink : public RE::BSTEventSink<RE::BSAnimationGraphEvent>
 		{
 		public:
 			RE::BSEventNotifyControl ProcessEvent(const RE::BSAnimationGraphEvent* a_ev, RE::BSTEventSource<RE::BSAnimationGraphEvent>*) override
 			{
-				if (!a_ev || !a_ev->holder || !a_ev->holder->IsPlayerRef()) {
-					return RE::BSEventNotifyControl::kContinue;
-				}
+				if (!a_ev || !a_ev->holder || !a_ev->holder->IsPlayerRef()) return RE::BSEventNotifyControl::kContinue;
 				const auto st = St_();
-				if (st != St::Requested && st != St::Playing && st != St::Drawing && !gAnimWindow) {
-					return RE::BSEventNotifyControl::kContinue;
-				}
+				if (st != St::Requested && st != St::Playing && st != St::Drawing) return RE::BSEventNotifyControl::kContinue;
+
 				const std::string tag = a_ev->tag.c_str() ? a_ev->tag.c_str() : "";
 				const std::string payload = a_ev->payload.c_str() ? a_ev->payload.c_str() : "";
-				const double      now = ClockNow();
-				if (S.logEvents && gLogBudget.fetch_sub(1) > 0) {
-					Say("+{:.2f}s evento: {}{}", now - gReqClock.load(), tag, payload.empty() ? std::string() : " [" + payload.substr(0, 90) + "]");
-				}
 				const auto lt = Lower(tag);
-				if (!tag.empty() && lt == Lower(S.anchorTag) && !gAnchored.load()) {
-					const std::string want = Lower(S.anchorPayload);
-					if (want.empty() || Lower(payload).find(want) != std::string::npos) {
-						gAnchorT0 = now - static_cast<double>(S.anchorTime);
-						gAnchored = true;
-					}
+				const double now = ClockNow();
+
+				// Marker univoco della clip Ignite: il fuoco non usa piu' tempi stimati.
+				if (st == St::Requested && !gAnchored.load() && lt == kAnchorTag &&
+					Lower(payload).find(kAnchorPayload) != std::string::npos) {
+					gAnchorT0 = now - 0.20;
+					gAnchored = true;
+					if (S.logEvents) Say("marker Ignite ricevuto: Pie [@APPLYSPELL]");
+					return RE::BSEventNotifyControl::kContinue;
 				}
-				// l'arma sta venendo rinfoderata / la clip e' stata interrotta: lo gestisce il tick (solo dopo l'avvio della richiesta)
+
+				// Gli IdleStop MCO/SCAR anteriori al marker non possono annullare Ignite.
 				if (st == St::Requested || st == St::Playing) {
-					if (now - gReqClock.load() > 0.1) {
+					if (now - gReqClock.load() > 0.10) {
 						if (lt == "beginweaponsheathe" || lt == "weaponsheathe" || lt == "unequip") gSheathEv = true;
-						else if (lt == "idlestop" && now - gReqClock.load() > 0.5) gIdleStopEv = true;
+						else if (st == St::Playing && lt == "idlestop") gIdleStopEv = true;
 					}
 				}
 				return RE::BSEventNotifyControl::kContinue;
@@ -436,16 +411,13 @@ namespace bf::mode
 		void ResetAll(bool a_hideFx)
 		{
 			Lock(false);
-			gTriggerPending = false;
-			gTriggerEvent.clear();
-			gAnimWindow = false;
+			gMarkerDeadline = 0.0;
 			gHasT0 = false;
 			gAnchored = false;
-			SetGlobal(kGlobalAnim, 0.0f);
+			gSheathEv = false;
+			gIdleStopEv = false;
 			SetGlobal(kGlobalOn, 0.0f);
-			if (a_hideFx) {
-				fx::Hide();
-			}
+			if (a_hideFx) fx::Hide();
 			Enter(St::Off);
 		}
 
@@ -458,9 +430,7 @@ namespace bf::mode
 		void BeginIgnite(RE::PlayerCharacter* a_pc)
 		{
 			DrainMana(a_pc, S.manaStart);
-			if (!fx::Resolve(a_pc)) {
-				Say("attenzione: {}", fx::Describe());
-			}
+			if (!fx::Resolve(a_pc)) Say("attenzione: {}", fx::Describe());
 			fx::Begin(S.rampSeconds);
 			PlayIgnite();
 			SetGlobal(kGlobalOn, 1.0f);
@@ -469,96 +439,29 @@ namespace bf::mode
 			Say("accensione graduale (durata {:.2f}s)", S.rampSeconds);
 		}
 
-		void AttemptAnimationTrigger(RE::PlayerCharacter* a_pc, double a_now)
-		{
-			if (!gTriggerPending || !a_pc) return;
-
-			if (a_now >= gTriggerDeadline) {
-				gTriggerPending = false;
-				gTriggerEvent.clear();
-				SetGlobal(kGlobalAnim, 0.0f);
-				gAnimWindow = false;
-				Say("evento standalone non partito dopo {} tentativi: {}", gTriggerAttempts, S.triggerEvent);
-				if (S.fallbackIgnite) {
-					Say("fallback: accendo la lama dopo il timeout dell'animazione");
-					BeginIgnite(a_pc);
-				} else {
-					Abort("il behavior non ha accettato l'evento di accensione");
-				}
-				return;
-			}
-			if (a_now < gTriggerNextTry) return;
-
-			// MCO/SCAR e altre combat animation possono rifiutare una transizione
-			// mentre l'attacco e' ancora attivo. Accoda il trigger fino al termine.
-			bool graphAttacking = false;
-			const bool hasGraphAttackState = a_pc->GetGraphVariableBool(RE::BSFixedString("IsAttacking"), graphAttacking);
-			if (a_pc->IsAttacking() || (hasGraphAttackState && graphAttacking)) {
-				gTriggerNextTry = a_now + 0.20;
-				if (a_now >= gTriggerLastLog) {
-					Say("evento standalone in coda: aspetto la fine dell'attacco/combat animation");
-					gTriggerLastLog = a_now + 1.0;
-				}
-				return;
-			}
-
-			AttachSink(a_pc);
-			SetGlobal(kGlobalAnim, 1.0f);
-			const bool ok = a_pc->NotifyAnimationGraph(gTriggerEvent);
-			++gTriggerAttempts;
-			if (ok) {
-				gTriggerPending = false;
-				gReqClock = a_now;
-				gLastEvent = gTriggerEvent;
-				gTriggerEvent.clear();
-				gAnimWindow = true;
-				gAnimWindowUntil = a_now + std::max(12.0, static_cast<double>(S.clipLength) + 3.0);
-				gHasT0 = false;
-				gAnchored = false;
-				gSheathEv = false;
-				gIdleStopEv = false;
-				gDiagTimer = 0.0f;
-				gLogBudget = 90;
-				if (S.lockControls || S.lockAttack) {
-					Lock(true);
-					gLockUntil = a_now + static_cast<double>(S.clipLength) + 3.0;
-				}
-				Say("evento standalone accettato al tentativo {}", gTriggerAttempts);
-				return;
-			}
-
-			SetGlobal(kGlobalAnim, 0.0f);
-			gTriggerNextTry = a_now + 0.25;
-			if (gTriggerAttempts == 1 || a_now >= gTriggerLastLog) {
-				Say("evento standalone rifiutato al tentativo {}: riprovo tra 0.25s", gTriggerAttempts);
-				gTriggerLastLog = a_now + 1.0;
-			}
-		}
-
 		void FireTrigger(RE::PlayerCharacter* a_pc)
 		{
+			if (!a_pc) { Abort("personaggio non disponibile"); return; }
 			AttachSink(a_pc);
+			Lock(true);
 			gAnchored = false;
 			gHasT0 = false;
 			gSheathEv = false;
 			gIdleStopEv = false;
 			gNotDrawnSince = -1.0;
-			gDiagTimer = 0.0f;
-			gLogBudget = 90;
 			gReqClock = ClockNow();
-			gTriggerEvent = S.triggerEvent[0] ? S.triggerEvent : "BFM_Ignite";
-			gLastEvent.clear();
-			gTriggerPending = true;
-			gTriggerAttempts = 0;
-			gTriggerNextTry = gReqClock.load();
-			gTriggerDeadline = gReqClock.load() + std::max(8.0, static_cast<double>(S.startTimeout) + 5.0);
-			gTriggerLastLog = 0.0;
-			SetGlobal(kGlobalAnim, 0.0f);
-			gAnimWindow = false;
-			Say("evento standalone '{}' messo in coda; lo ritento finche' il behavior non lo accetta", gTriggerEvent);
+			gMarkerDeadline = gReqClock.load() + static_cast<double>(S.startTimeout);
+			gLockUntil = gReqClock.load() + static_cast<double>(S.clipLength) + 1.0;
+
+			// La transizione BFM nel behavior e' globale e alla priorita' massima.
+			// Se e' rifiutata, Nemesis non ha caricato questa patch: niente fuoco.
+			if (!a_pc->NotifyAnimationGraph(kIgniteEvent)) {
+				Hud("Ignite non disponibile: rigenera Nemesis e verifica bfm1");
+				Abort("BFM_Ignite rifiutato dal behavior attivo");
+				return;
+			}
 			Enter(St::Requested);
-			AttemptAnimationTrigger(a_pc, ClockNow());
-			return;
+			Say("BFM_Ignite accettato: attendo il marker della clip");
 		}
 		// true = accensione annullata (arma rinfoderata o clip interrotta prima del contatto)
 		bool CheckInterrupt(RE::PlayerCharacter* a_pc, double a_now)
@@ -568,23 +471,14 @@ namespace bf::mode
 			} else {
 				gNotDrawnSince = -1.0;
 			}
-			const bool sheathed = gSheathEv.load() || (gNotDrawnSince >= 0.0 && a_now - gNotDrawnSince > 0.25);
+			const bool sheathed = gHasT0 && (gSheathEv.load() || (gNotDrawnSince >= 0.0 && a_now - gNotDrawnSince > 0.25));
 			if (sheathed) {
-				std::string msg = "arma rinfoderata durante l'animazione: accensione annullata";
-				if (gLocked) {
-					S.lockControls = false;
-					S.lockAttack = false;
-					RequestSave();
-					msg += " (ho disattivato il blocco dei comandi, riprova)";
-				}
-				if (!gLastEvent.empty() && (a_now - gReqClock.load()) < 3.0) {
-					msg += " Evento standalone '" + gLastEvent + "' interrotto; al prossimo uso verra' riprovato";
-				}
-				Hud(msg);
+				Hud("Arma rinfoderata durante Ignite: accensione annullata");
 				Abort("arma rinfoderata durante l'animazione");
 				return true;
 			}
 			if (gIdleStopEv.load() && gHasT0 && (a_now - gT0) < static_cast<double>(S.ignitionOffset) - 0.3) {
+
 				Hud("Animazione interrotta: accensione annullata");
 				Abort("animazione interrotta prima del contatto");
 				return true;
@@ -616,14 +510,14 @@ namespace bf::mode
 			fx::Resolve(pc);
 			fx::InstanceChanged();
 
-			if (!S.animEnabled) {
-				BeginIgnite(pc);
-				return;
-			}
+			// Dal tasto alla fine della opening non puo' sovrapporsi alcuna azione.
+			Lock(true);
+			gLockUntil = ClockNow() + 4.0;  // copre l'estrazione automatica
 
 			auto* state = pc->AsActorState();
 			if (state && !state->IsWeaponDrawn()) {
 				if (!S.drawIfSheathed) {
+					Lock(false);
 					Hud("Estrai l'arma");
 					return;
 				}
@@ -717,7 +611,7 @@ namespace bf::mode
 				s.manaMax = a_pc->AsActorValueOwner()->GetPermanentActorValue(RE::ActorValue::kMagicka);
 			}
 			s.fx = fx::Describe();
-			s.espOk = Glob(kGlobalAnim) != nullptr;
+			s.espOk = Glob(kGlobalOn) != nullptr;
 			s.hits = gHits.load();
 			s.lastExtra = gLastExtra.load();
 			s.burning = static_cast<int>(gBurn.size());
@@ -752,8 +646,8 @@ namespace bf::mode
 		if (auto* pc = RE::PlayerCharacter::GetSingleton()) {
 			AttachSink(pc);
 		}
-		if (!Glob(kGlobalAnim)) {
-			Say("ATTENZIONE: {} non trovato tra i plugin attivi: l'animazione non puo' essere sostituita", kEsp);
+		if (!Glob(kGlobalOn)) {
+			Say("ATTENZIONE: {} non trovato tra i plugin attivi", kEsp);
 		}
 	}
 
@@ -814,20 +708,13 @@ namespace bf::mode
 		if (!pc->Is3DLoaded()) return;
 
 		HandleRequests();
-		if (gTriggerPending && St_() == St::Requested) {
-			AttemptAnimationTrigger(pc, now);
-		}
 
 		// morte o attesa: tutto spento
 		if (pc->IsDead() && St_() != St::Off) {
 			ResetAll(true);
 		}
 
-		// finestra animazione (OAR) e blocco comandi: sempre sotto controllo
-		if (gAnimWindow && (now > gAnimWindowUntil || (gHasT0 && now > gT0 + S.clipLength + 0.4))) {
-			gAnimWindow = false;
-			SetGlobal(kGlobalAnim, 0.0f);
-		}
+		// Il blocco termina con la clip, anche se l'effetto resta acceso.
 		if (gLocked && (now > gLockUntil || (gHasT0 && now > gT0 + S.clipLength))) {
 			Lock(false);
 		}
@@ -863,25 +750,17 @@ namespace bf::mode
 				break;
 			}
 			if (CheckInterrupt(pc, now)) break;
-			if (gTriggerPending) break;  // aspetta che il behavior accetti il trigger
-			gDiagTimer += dt;
-			if (gDiagTimer > 0.5f && S.logEvents) {
-				gDiagTimer = 0.0f;
-				Say("+{:.2f}s in attesa della clip: arma estratta={} ancorata={}", now - gReqClock.load(), IsDrawn(pc) ? "si" : "NO", gAnchored.load() ? "si" : "no");
-			}
 			if (gAnchored.load()) {
 				gT0 = gAnchorT0.load();
 				gHasT0 = true;
-				Say("animazione agganciata all'evento di riferimento (inizio clip {:.2f}s fa)", now - gT0);
+					gLockUntil = gT0 + static_cast<double>(S.clipLength) + 0.15;
+				Say("opening Ignite agganciata al marker della clip");
 				Enter(St::Playing);
-			} else if (now - gReqClock.load() >= static_cast<double>(S.startTimeout)) {
-				gT0 = gReqClock.load() + 0.15;
-				gHasT0 = true;
-				Say("evento di riferimento non arrivato: tempi stimati dall'avvio della richiesta");
-				Enter(St::Playing);
+			} else if (now >= gMarkerDeadline) {
+				Hud("Ignite annullata: marker della clip non ricevuto");
+				Abort("@APPLYSPELL non ricevuto dalla clip Ignite");
 			}
 			break;
-
 		case St::Playing: {
 			if (!EquippedSword(pc)) {
 				Abort("spada non piu' equipaggiata");
@@ -893,9 +772,7 @@ namespace bf::mode
 				gDiagTimer = 0.0f;
 				Say("clip a {:.2f}s: arma estratta={}", now - gT0, IsDrawn(pc) ? "si" : "NO");
 			}
-			if (gAnchored.load()) {
-				gT0 = gAnchorT0.load();  // riallineo finche' non accendo
-			}
+
 			const double t = now - gT0;
 			if (t >= static_cast<double>(S.ignitionOffset)) {
 				Say("contatto mano-lama a {:.2f}s: accendo", t);
@@ -973,3 +850,4 @@ namespace bf::mode
 		}
 	}
 }
+
