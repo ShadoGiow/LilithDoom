@@ -3,8 +3,7 @@
 #include <filesystem>
 #include <string>
 
-// Installazione dell'animazione di accensione: copia il file .hkx scelto nella cartella
-// di Open Animation Replacer sotto tutti i nomi delle clip di "combat idle".
+// Installazione della singola clip di accensione usata dallo stato dedicato Nemesis.
 
 namespace bf::anim
 {
