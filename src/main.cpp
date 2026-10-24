@@ -5,6 +5,7 @@
 #include "Log.h"
 #include "Menu.h"
 #include "Mode.h"
+#include "OAR.h"
 #include "Settings.h"
 
 // BladeFireMode - progetto PERSONALE (mashup per il mio gioco, non una release per altri).
@@ -63,6 +64,9 @@ namespace
 	void OnMessage(SKSE::MessagingInterface::Message* a_msg)
 	{
 		switch (a_msg->type) {
+		case SKSE::MessagingInterface::kPostLoad:
+			bf::oar::Register();
+			break;
 		case SKSE::MessagingInterface::kDataLoaded:
 			try {
 				bf::mode::Install();
@@ -97,3 +101,4 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse)
 	SKSE::GetMessagingInterface()->RegisterListener(OnMessage);
 	return true;
 }
+
