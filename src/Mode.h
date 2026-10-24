@@ -39,4 +39,6 @@ namespace bf::mode
 
 	Snapshot GetSnapshot();
 	bool     IsActive();    // acceso o in accensione
+	bool     IsOARIgniting();  // condizione OAR esclusiva dell'apertura Ignite
 }
+
