@@ -459,12 +459,19 @@ namespace bf::mode
 			// OAR la sostituisce con Ignite solo durante questa richiesta.
 			gOarIgniting = true;
 			auto* idle = RE::TESForm::LookupByID<RE::TESIdleForm>(kIgniteIdle);
-			if (!idle || !a_pc->currentProcess || !a_pc->currentProcess->PlayIdle(a_pc, idle, nullptr)) {
+			auto* process = a_pc->GetActorRuntimeData().currentProcess;
+			if (!idle || !process) {
+				Hud("Ignite non disponibile: processo attore non pronto");
+				Abort("IdleWarmHands o processo attore non disponibile");
+				return;
+			}
+			// Lo stato deve essere impostato prima di PlayIdle: l'annotazione puo' arrivare subito.
+			Enter(St::Requested);
+			if (!process->PlayIdle(a_pc, idle, nullptr)) {
 				Hud("Ignite non disponibile: IdleWarmHands non avviata");
 				Abort("PlayIdle IdleWarmHands rifiutata dal behavior attivo");
 				return;
 			}
-			Enter(St::Requested);
 			Say("IdleWarmHands avviata via PlayIdle: attendo il marker della clip Ignite");
 		}
 		// true = accensione annullata (arma rinfoderata o clip interrotta prima del contatto)
@@ -860,6 +867,7 @@ namespace bf::mode
 		}
 	}
 }
+
 
 
 
