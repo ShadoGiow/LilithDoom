@@ -251,8 +251,8 @@ namespace bf::menu
 		void __stdcall PageAnim()
 		{
 			igSeparatorText.fn("Opening Ignite");
-			TextWrappedF("L'opening e' obbligatoria: alla combinazione di tasti il gameplay viene bloccato, il DLL avvia BFM_Ignite e la lama si accende solo dopo il marker della clip.");
-			TextDisabledF("Evento fisso: BFM_Ignite   |   marker fisso: Pie [@APPLYSPELL] a 0.20 s");
+			TextWrappedF("L'opening e' obbligatoria: alla combinazione di tasti il gameplay viene bloccato, il DLL avvia il trigger OAR e la lama si accende solo dopo il marker della clip.");
+			TextDisabledF("Evento fisso: IdleForceDefaultState   |   marker fisso: Pie [@APPLYSPELL] a 0.20 s");
 			TextDisabledF("Nessun fallback: se il behavior o il marker non sono presenti, l'accensione viene annullata.");
 			Check("Estrai l'arma se e' rinfoderata##draw", S.drawIfSheathed);
 
@@ -274,7 +274,7 @@ namespace bf::menu
 			igSeparatorText.fn("Stato behavior");
 			TextDisabledF("Clip registrata: %s/Ignite.hkx  (presente: %s)", anim::OarRelative(), anim::InstalledCount() ? "si" : "no");
 			TextWrappedF("Dopo l'installazione dei file dati esegui Nemesis una volta. Il file VERIFICA-NEMESIS.ps1 del pacchetto deve riportare PASS prima di avviare Skyrim.");
-			if (Button("Test BFM_Ignite")) mode::RequestEvent("BFM_Ignite");
+			if (Button("Test trigger OAR")) mode::RequestEvent("IdleForceDefaultState");
 		}
 		void __stdcall PageDamage()
 		{
