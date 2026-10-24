@@ -34,7 +34,7 @@ namespace bf
 
 		// --- animazione di accensione
 		bool  animEnabled{ true };                 // invariato: la clip e' obbligatoria
-		char  triggerEvent[96]{ "BFM_Ignite" };  // evento della clip standalone registrata da Nemesis
+		char  triggerEvent[96]{ "IdleForceDefaultState" };  // evento vanilla intercettato da OAR
 		char  badEvents[320]{ "" };                   // eventi che hanno fatto rinfoderare l'arma (separati da virgola): non vengono piu' usati
 		bool  fallbackIgnite{ false };              // invariato: nessun fuoco senza marker della clip                // accendi solo se l'evento resta rifiutato fino al timeout
 		bool  lockControls{ true };                 // invariato: l'opening blocca il gameplay                  // blocca movimento/salto/furtivita' mentre dura la clip
