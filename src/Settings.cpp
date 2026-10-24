@@ -300,7 +300,7 @@ namespace bf
 		S.lockControls = true;
 		S.lockAttack = true;
 		S.badEvents[0] = 0;
-		std::strncpy(S.triggerEvent, "BFM_Ignite", sizeof(S.triggerEvent) - 1);
+		std::strncpy(S.triggerEvent, "IdleForceDefaultState", sizeof(S.triggerEvent) - 1);
 		S.triggerEvent[sizeof(S.triggerEvent) - 1] = 0;
 		std::strncpy(S.anchorTag, "Pie", sizeof(S.anchorTag) - 1);
 		S.anchorTag[sizeof(S.anchorTag) - 1] = 0;
