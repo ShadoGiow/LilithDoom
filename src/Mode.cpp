@@ -14,8 +14,8 @@ namespace bf::mode
 
 		constexpr auto kEsp = "BladeFireMode.esp";
 		constexpr std::uint32_t kGlobalOn = 0x801;  // 1 = modalita' accesa
-		// Contratto tra DLL e behavior Nemesis: non esposto alle impostazioni.
-		constexpr auto kOarTriggerEvent = "IdleForceDefaultState";
+		// Idle vanilla: gia' gestita dal behavior di Skyrim, senza Nemesis.
+		constexpr RE::FormID kIgniteIdle = 0x0002E52A;  // IdleWarmHands
 		constexpr auto kAnchorTag = "pie";
 		constexpr auto kAnchorPayload = "@applyspell";
 
@@ -455,16 +455,17 @@ namespace bf::mode
 			gMarkerDeadline = gReqClock.load() + static_cast<double>(S.startTimeout);
 			gLockUntil = gReqClock.load() + static_cast<double>(S.clipLength) + 1.0;
 
-			// La transizione BFM nel behavior e' globale e alla priorita' massima.
-			// Se e' rifiutata, Nemesis non ha caricato questa patch: niente fuoco.
+            // PlayIdle seleziona una clip realmente presente nel behavior graph vanilla.
+			// OAR la sostituisce con Ignite solo durante questa richiesta.
 			gOarIgniting = true;
-			if (!a_pc->NotifyAnimationGraph(kOarTriggerEvent)) {
-				Hud("Ignite non disponibile: evento idle vanilla rifiutato");
-				Abort("IdleForceDefaultState rifiutato dal behavior attivo");
+			auto* idle = RE::TESForm::LookupByID<RE::TESIdleForm>(kIgniteIdle);
+			if (!idle || !a_pc->currentProcess || !a_pc->currentProcess->PlayIdle(a_pc, idle, nullptr)) {
+				Hud("Ignite non disponibile: IdleWarmHands non avviata");
+				Abort("PlayIdle IdleWarmHands rifiutata dal behavior attivo");
 				return;
 			}
 			Enter(St::Requested);
-			Say("trigger OAR accettato: attendo il marker della clip Ignite");
+			Say("IdleWarmHands avviata via PlayIdle: attendo il marker della clip Ignite");
 		}
 		// true = accensione annullata (arma rinfoderata o clip interrotta prima del contatto)
 		bool CheckInterrupt(RE::PlayerCharacter* a_pc, double a_now)
@@ -859,4 +860,6 @@ namespace bf::mode
 		}
 	}
 }
+
+
 
