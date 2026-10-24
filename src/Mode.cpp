@@ -15,7 +15,7 @@ namespace bf::mode
 		constexpr auto kEsp = "BladeFireMode.esp";
 		constexpr std::uint32_t kGlobalOn = 0x801;  // 1 = modalita' accesa
 		// Contratto tra DLL e behavior Nemesis: non esposto alle impostazioni.
-		constexpr auto kIgniteEvent = "BFM_Ignite";
+		constexpr auto kOarTriggerEvent = "IdleForceDefaultState";
 		constexpr auto kAnchorTag = "pie";
 		constexpr auto kAnchorPayload = "@applyspell";
 
@@ -45,6 +45,7 @@ namespace bf::mode
 
 		std::atomic<bool>   gAnchored{ false };
 		std::atomic<double> gAnchorT0{ 0.0 };
+		std::atomic<bool>   gOarIgniting{ false };
 
 		std::atomic<int> gReqOn{ 0 }, gReqOff{ 0 };
 		std::mutex       gEvMx;
@@ -410,6 +411,7 @@ namespace bf::mode
 		// ---------------------------------------------------------------- percorso di avvio
 		void ResetAll(bool a_hideFx)
 		{
+			gOarIgniting = false;
 			Lock(false);
 			gMarkerDeadline = 0.0;
 			gHasT0 = false;
@@ -455,13 +457,14 @@ namespace bf::mode
 
 			// La transizione BFM nel behavior e' globale e alla priorita' massima.
 			// Se e' rifiutata, Nemesis non ha caricato questa patch: niente fuoco.
-			if (!a_pc->NotifyAnimationGraph(kIgniteEvent)) {
-				Hud("Ignite non disponibile: rigenera Nemesis e verifica bfm1");
-				Abort("BFM_Ignite rifiutato dal behavior attivo");
+			gOarIgniting = true;
+			if (!a_pc->NotifyAnimationGraph(kOarTriggerEvent)) {
+				Hud("Ignite non disponibile: evento idle vanilla rifiutato");
+				Abort("IdleForceDefaultState rifiutato dal behavior attivo");
 				return;
 			}
 			Enter(St::Requested);
-			Say("BFM_Ignite accettato: attendo il marker della clip");
+			Say("trigger OAR accettato: attendo il marker della clip Ignite");
 		}
 		// true = accensione annullata (arma rinfoderata o clip interrotta prima del contatto)
 		bool CheckInterrupt(RE::PlayerCharacter* a_pc, double a_now)
@@ -674,6 +677,11 @@ namespace bf::mode
 		return s == St::On || s == St::Igniting;
 	}
 
+	bool IsOARIgniting()
+	{
+		return gOarIgniting.load();
+	}
+
 	Snapshot GetSnapshot()
 	{
 		std::lock_guard l(gSnapMx);
@@ -717,6 +725,7 @@ namespace bf::mode
 		// Il blocco termina con la clip, anche se l'effetto resta acceso.
 		if (gLocked && (now > gLockUntil || (gHasT0 && now > gT0 + S.clipLength))) {
 			Lock(false);
+			gOarIgniting = false;
 		}
 
 		switch (St_()) {
